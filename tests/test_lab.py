@@ -3,7 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from paper_lab.agents import DEFAULT_ROLES
-from paper_lab.llm import MockLLM, extract_response_text
+from paper_lab.llm import MockLLM, extract_response_text, retry_wait_seconds
 from paper_lab.meetings import PaperReadingLab
 from paper_lab.paper_loader import load_paper
 
@@ -53,6 +53,14 @@ class PaperReadingLabTest(unittest.TestCase):
 
             with self.assertRaises(ValueError):
                 load_paper(paper_path)
+
+    def test_retry_wait_seconds_from_rate_limit_message(self):
+        class Error:
+            headers = {}
+
+        details = "Rate limit reached. Please try again in 20.956s."
+
+        self.assertAlmostEqual(retry_wait_seconds(Error(), details, attempt=0), 22.956)
 
 
 if __name__ == "__main__":

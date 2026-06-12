@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import re
+import time
 import textwrap
 import urllib.error
 import urllib.request
@@ -162,6 +164,7 @@ class OpenAIResponsesLLM:
         self.model = os.getenv("PAPER_LAB_MODEL", "gpt-4.1")
         self.base_url = os.getenv("PAPER_LAB_BASE_URL", "https://api.openai.com/v1").rstrip("/")
         self.store = env_bool("PAPER_LAB_STORE", False)
+        self.max_retries = int(os.getenv("PAPER_LAB_MAX_RETRIES", "5"))
         if not self.api_key:
             raise RuntimeError("OPENAI_API_KEY is required for openai provider.")
 
@@ -173,24 +176,39 @@ class OpenAIResponsesLLM:
             "temperature": temperature,
             "store": self.store,
         }
-        request = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
-            method="POST",
-        )
-
-        try:
-            with urllib.request.urlopen(request, timeout=90) as response:
-                data = json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            details = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"LLM request failed: {exc.code} {details}") from exc
+        data = self._post_with_retries(url, payload)
 
         return extract_response_text(data)
+
+    def _post_with_retries(self, url: str, payload: dict) -> dict:
+        body = json.dumps(payload).encode("utf-8")
+        for attempt in range(self.max_retries + 1):
+            request = urllib.request.Request(
+                url,
+                data=body,
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
+
+            try:
+                with urllib.request.urlopen(request, timeout=120) as response:
+                    return json.loads(response.read().decode("utf-8"))
+            except urllib.error.HTTPError as exc:
+                details = exc.read().decode("utf-8", errors="replace")
+                if exc.code != 429 or attempt >= self.max_retries:
+                    raise RuntimeError(f"LLM request failed: {exc.code} {details}") from exc
+
+                wait_seconds = retry_wait_seconds(exc, details, attempt)
+                print(
+                    f"Rate limit hit; waiting {wait_seconds:.1f}s before retry "
+                    f"{attempt + 1}/{self.max_retries}."
+                )
+                time.sleep(wait_seconds)
+
+        raise RuntimeError("LLM request failed after retries.")
 
 
 class OpenAICompatibleLLM(OpenAIResponsesLLM):
@@ -210,6 +228,21 @@ def extract_response_text(data: dict) -> str:
     if texts:
         return "\n".join(texts)
     raise RuntimeError(f"Could not find text in Responses API payload: {json.dumps(data)[:800]}")
+
+
+def retry_wait_seconds(exc: urllib.error.HTTPError, details: str, attempt: int) -> float:
+    retry_after = exc.headers.get("Retry-After")
+    if retry_after:
+        try:
+            return float(retry_after) + 1.0
+        except ValueError:
+            pass
+
+    match = re.search(r"try again in ([0-9.]+)s", details, flags=re.IGNORECASE)
+    if match:
+        return float(match.group(1)) + 2.0
+
+    return min(60.0, 2.0 ** attempt + 2.0)
 
 
 def build_llm(provider: str | None = None):

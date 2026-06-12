@@ -18,13 +18,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-paper-chars",
         type=int,
-        default=60000,
+        default=20000,
         help="Maximum paper characters sent to each agent. Use 0 to send the full extracted text.",
     )
     parser.add_argument(
         "--provider",
         default=None,
-        choices=["mock", "openai-compatible"],
+        choices=["mock", "openai", "openai-compatible"],
         help="LLM provider. Defaults to PAPER_LAB_PROVIDER or mock.",
     )
     parser.add_argument("--show-transcript", action="store_true", help="Print all meeting notes before synthesis.")

@@ -37,7 +37,7 @@ Run a PDF paper directly:
 python -m paper_lab --paper "paper/Can AI Agents Synthesize Scientific Conclusions.pdf" --parallel-meetings 2 --output outputs/can_ai_agents_reading_note.md
 ```
 
-PDF runs default to the first `60000` extracted characters to keep early experiments cheaper. Use `--max-paper-chars 0` only when you intentionally want to send the full extracted text to every agent.
+PDF runs default to the first `20000` extracted characters to keep early experiments cheaper and avoid token-per-minute limits. Use `--max-paper-chars 0` only when you intentionally want to send the full extracted text to every agent.
 
 Run the zero-dependency test suite:
 
