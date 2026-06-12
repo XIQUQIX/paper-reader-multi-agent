@@ -1,0 +1,11 @@
+[project]
+name = "paper-readar"
+version = "0.1.0"
+description = "A small Virtual Lab style multi-agent paper reading assistant."
+requires-python = ">=3.10"
+dependencies = [
+    "pypdf>=5.0.0",
+]
+
+[tool.setuptools]
+packages = ["paper_lab"]
